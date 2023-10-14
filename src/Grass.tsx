@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import grassWGSL from "./Grass.wgsl?raw";
+import { vec3, mat4 } from "wgpu-matrix";
 
 export default function Grass() {
   const ref = useRef(null);
@@ -110,14 +111,116 @@ export default function Grass() {
         format: canvasFormat,
       });
 
-      // Create uniform buffer for time
+      // Create uniform buffer for everything
       const time = new Float32Array([0]);
+      const PI = 3.14159265358979323846;
+      // MODEL TRANSFORM
+      // Scaling Matrix
+      const S = mat4.scaling(vec3.create(0.3, 0.3, 0.3));
+      // Translate Object
+      const T1 = mat4.translation(vec3.create(0.5, 0.0, 0.0));
+      // Rotate object
+      let angle1 = time[0];
+      let c1 = Math.cos(angle1);
+      let s1 = Math.sin(angle1);
+      const R1 = mat4.create(
+        c1,
+        s1,
+        0.0,
+        0.0,
+        -s1,
+        c1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      );
+      //R1 * T1 * S
+      const modelMatrix = mat4.mul(mat4.mul(R1, T1), S);
+
+      // VIEW TRANSFORM
+      const focalPoint = vec3.create(0.0, 0.0, -2.0);
+      const T2 = mat4.translation(focalPoint);
+      // Rotate viewpoint
+      let angle2 = (3.0 * PI) / 4.0;
+      let c2 = Math.cos(angle2);
+      let s2 = Math.sin(angle2);
+      const R2 = mat4.create(
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        c2,
+        s2,
+        0.0,
+        0.0,
+        -s2,
+        c2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      );
+      // T2 * R2
+      const viewMatrix = mat4.mul(T2, R2);
+
+      // PROJECTION
+      const ratio = 1;
+      const focalLength = 2;
+      const near = 0.01;
+      const far = 100.0;
+      const divider = 1 / (focalLength * (far - near));
+      const projectionMatrix = mat4.create(
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        ratio,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        far * divider,
+        -far * near * divider,
+        0.0,
+        0.0,
+        1.0 / focalLength,
+        0.0
+      );
+
+      const uniforms = {
+        // Size and offset (in floats) of uniform data withiin
+        // the uniform buffer and in uniformData array.
+        projection: { size: 16, offset: 0 },
+        view: { size: 16, offset: 16 },
+        modelview: { size: 16, offset: 32 },
+        time: { size: 1, offset: 48 },
+      };
+
+      const uniformData = new Float32Array(49); // 16+16+16+1 = 49
+      uniformData.set(projectionMatrix, 0);
+      uniformData.set(viewMatrix, 16);
+      uniformData.set(modelMatrix, 32);
+      uniformData[48] = time[0];
+
+      //Pmatrix is 16 f32s, so thats 4 bytes * 16, = 64 bytes
+      //viewmatrix is 64 bytes, and so is modelmatrix, time is 1 f32 aka 4 bytes
       const uniformBuffer = device.createBuffer({
-        label: "Time uniform",
-        size: 4,
+        label: "My uniforms",
+        size: 4 * uniformData.length, //4 bytes * 49
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
-      device.queue.writeBuffer(uniformBuffer, 0, time);
+      device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+      //device.queue.writeBuffer(uniformBuffer, 0, time);
 
       // Create the bind group layout and pipeline layout.
       const bindGroupLayout = device.createBindGroupLayout({
@@ -214,7 +317,19 @@ export default function Grass() {
         // Update uniform buffer
 
         time[0] = step;
-        device.queue.writeBuffer(uniformBuffer, 0, time);
+        device.queue.writeBuffer(
+          uniformBuffer,
+          0,
+          time,
+          0,
+          uniforms["time"].size
+        );
+        /**device.queue.writeBuffer(
+          uniformBuffer,
+          uniforms["time"].offset,
+          time,
+          uniforms["time"].size
+        ); */
 
         // Render pass start
         const pass = encoder.beginRenderPass({

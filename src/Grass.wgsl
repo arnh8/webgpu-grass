@@ -1,6 +1,12 @@
-@group(0) @binding(0) var<uniform> uTime: f32;
-
 const pi = 3.14159265359;
+
+struct myUniforms {
+    projectionMatrix: mat4x4f,
+    viewMatrix: mat4x4f,
+    modelMatrix: mat4x4f,
+    //color: vec4f,
+    time: f32,
+}
 
 struct VertexInput {
     @location(0) pos: vec3f,
@@ -12,6 +18,9 @@ struct VertexOutput {
    @builtin(position) pos: vec4f,
    @location(0) col: vec3f
 }
+
+@group(0) @binding(0) var<uniform> uTime: f32;
+//@group(0) @binding(0) var<uniform> uMyUniforms: myUniforms2;
 
 @vertex
 fn vertexMain(input: VertexInput) -> VertexOutput {
