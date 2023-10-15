@@ -114,11 +114,13 @@ export default function Grass() {
       // Create uniform buffer for everything
       const time = new Float32Array([0]);
       const PI = 3.14159265358979323846;
+
       // MODEL TRANSFORM
       // Scaling Matrix
       const S = mat4.scaling(vec3.create(0.3, 0.3, 0.3));
       // Translate Object
       const T1 = mat4.translation(vec3.create(0.5, 0.0, 0.0));
+
       // Rotate object
       let angle1 = time[0];
       let c1 = Math.cos(angle1);
@@ -141,14 +143,17 @@ export default function Grass() {
         0.0,
         1.0
       );
+      mat4.transpose(R1, R1);
       //R1 * T1 * S
       const modelMatrix = mat4.mul(mat4.mul(R1, T1), S);
+      //mat4.transpose(modelMatrix, modelMatrix);
 
       // VIEW TRANSFORM
-      const focalPoint = vec3.create(0.0, 0.0, -2.0);
+      const focalPoint = vec3.create(0.0, 0.0, 2.0);
       const T2 = mat4.translation(focalPoint);
+
       // Rotate viewpoint
-      let angle2 = (3.0 * PI) / 4.0;
+      let angle2 = (3 * PI) / 4.0;
       let c2 = Math.cos(angle2);
       let s2 = Math.sin(angle2);
       const R2 = mat4.create(
@@ -169,12 +174,12 @@ export default function Grass() {
         0.0,
         1.0
       );
-      // T2 * R2
-      const viewMatrix = mat4.mul(T2, R2);
+      mat4.transpose(R2, R2);
+      const viewMatrix = mat4.mul(T2, R2); // T2 * R2
 
       // PROJECTION
       const ratio = 1;
-      const focalLength = 2;
+      const focalLength = 2; //zoom?
       const near = 0.01;
       const far = 100.0;
       const divider = 1 / (focalLength * (far - near));
@@ -196,6 +201,7 @@ export default function Grass() {
         1.0 / focalLength,
         0.0
       );
+      mat4.transpose(projectionMatrix, projectionMatrix);
 
       const uniforms = {
         // Size and offset (in floats) of uniform data withiin
@@ -206,28 +212,27 @@ export default function Grass() {
         time: { size: 1, offset: 48 },
       };
 
-      const uniformData = new Float32Array(49); // 16+16+16+1 = 49
+      const uniformData = new Float32Array(52); // 16+16+16+1(technically 4) = 52
       uniformData.set(projectionMatrix, 0);
       uniformData.set(viewMatrix, 16);
       uniformData.set(modelMatrix, 32);
       uniformData[48] = time[0];
 
-      //Pmatrix is 16 f32s, so thats 4 bytes * 16, = 64 bytes
-      //viewmatrix is 64 bytes, and so is modelmatrix, time is 1 f32 aka 4 bytes
+      // Pmatrix is 16 f32s, so thats 4 bytes * 16, = 64 bytes
+      // Vmatrix is 64 bytes, and so is modelmatrix, time is 1 f32 aka 4 bytes
       const uniformBuffer = device.createBuffer({
         label: "My uniforms",
-        size: 4 * uniformData.length, //4 bytes * 49
+        size: 4 * uniformData.length, // 4 bytes * 52
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
       device.queue.writeBuffer(uniformBuffer, 0, uniformData);
-      //device.queue.writeBuffer(uniformBuffer, 0, time);
 
       // Create the bind group layout and pipeline layout.
       const bindGroupLayout = device.createBindGroupLayout({
         label: "Time Bind Group Layout",
         entries: [
           {
-            binding: 0, //correspongs to binding(0) in shaders
+            binding: 0, // orresponds to binding(0) in shaders
             visibility: GPUShaderStage.VERTEX,
             //| GPUShaderStage.FRAGMENT,
             buffer: {}, // Grid uniform buffer
@@ -300,7 +305,7 @@ export default function Grass() {
 
       //Set up rendering loop
       const UPDATE_INTERVAL = 16; // Update every 200ms (5 times/sec)
-      let step = 0; // Track how many simulation steps have been run
+      let step = 0; // Track how many loops have been run
 
       const texture = device.createTexture({
         size: [canvas.width, canvas.height],
@@ -315,22 +320,26 @@ export default function Grass() {
         const encoder = device.createCommandEncoder();
         step++;
         // Update uniform buffer
-
+        // Updating time
         time[0] = step;
         device.queue.writeBuffer(
           uniformBuffer,
-          0,
+          uniforms["time"].offset * 4,
           time,
           0,
           uniforms["time"].size
         );
-        /**device.queue.writeBuffer(
+        // Updating view
+        mat4.rotate(R1, vec3.create(0, 0, 1), -(0.04 * PI) / 4, R1);
+        mat4.mul(mat4.mul(R1, T1), S, modelMatrix); //modelmatrix = R1 * T1 * S
+        uniformData.set(modelMatrix, 32);
+        device.queue.writeBuffer(
           uniformBuffer,
-          uniforms["time"].offset,
-          time,
-          uniforms["time"].size
-        ); */
-
+          uniforms["modelview"].offset * 4,
+          uniformData,
+          32,
+          uniforms["modelview"].size
+        );
         // Render pass start
         const pass = encoder.beginRenderPass({
           colorAttachments: [
@@ -359,7 +368,6 @@ export default function Grass() {
         pass.setBindGroup(0, bindGroup); //
         pass.setIndexBuffer(indexBuffer, "uint32", 0);
         pass.drawIndexed(indexes.length, 1, 0, 0, 0);
-        //pass.draw(vertices.length / 6, 1); //6 vertices
         pass.end();
         const commandBuffer = encoder.finish();
 
