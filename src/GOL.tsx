@@ -23,12 +23,14 @@ export default function Tortle() {
       const root = document.getElementById("root");
       const canvas = document.createElement("canvas");
       canvas.id = "charles";
+      canvas.height = 1200;
+      canvas.width = 1200;
       root?.appendChild(canvas);
 
       const context = canvas.getContext("webgpu");
       if (!context) return;
 
-      const GRID_SIZE = 512;
+      const GRID_SIZE = 256;
       // Create a uniform buffer that describes the grid.
       const uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
       const uniformBuffer = device.createBuffer({
@@ -276,7 +278,7 @@ export default function Tortle() {
       });
 
       //Set up rendering loop
-      const UPDATE_INTERVAL = 8; // Update every 200ms (5 times/sec)
+      const UPDATE_INTERVAL = 16; // Update every 200ms (5 times/sec)
       let step = 0; // Track how many simulation steps have been run
 
       function updateGrid() {
