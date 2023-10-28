@@ -56,8 +56,6 @@ button:focus-visible {
 }
 
 canvas {
-  width: 750px;
-  height: 750px;
   /* https://eliemichel.github.io/LearnWebGPU/basic-3d-rendering/input-geometry/index-buffer.html#ratio-correction */
 }
 
