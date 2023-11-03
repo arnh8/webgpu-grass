@@ -1,5 +1,3 @@
-const pi = 3.14159265359;
-
 struct myUniforms {
     projectionMatrix: mat4x4f,
     viewMatrix: mat4x4f,
@@ -20,24 +18,37 @@ struct VertexOutput {
 }
 
 @group(0) @binding(0) var<uniform> uMyUniforms: myUniforms;
-@group(0) @binding(1) var<storage, read> grassPositions: array<vec3<u32>, 64>;
+@group(0) @binding(1) var<storage, read> grassPositions: array<vec3<f32>, 64>;
 
 @vertex
 fn vertexMain(input: VertexInput) -> VertexOutput {
     let i = input.instance;
     var output: VertexOutput;
-    let transformx = f32(grassPositions[i].x);
-    let transformz = f32(grassPositions[i].z);
-    let transformed = vec4f(input.pos.x + transformx, input.pos.y, input.pos.z + transformz, 1.0);
-    output.pos = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix 
-                * uMyUniforms.modelMatrix * transformed;
-    //output.pos.x = output.pos.x + f32(grassPositions[i].x);
-    //output.pos.x = output.pos.x + f32(grassPositions[i].x) - 1;
-    //output.pos.y = output.pos.y + f32(grassPositions[i].z) - 1;
-    //output.pos.z = output.pos.z - 6;
-    //output.pos.z = output.pos.z - 0.5 * f32(i) + 0.5;
-    //output.pos.z = output.pos.z + f32(grassPositions[i].z);
-    output.col = input.col;
+    // Hash the instance num into rand -1-1
+    let hash = perlinNoise2(vec2f(grassPositions[i].x * 0.1, grassPositions[i].z* 0.1));
+    var multi: f32 = 0.0;
+    if(hash < 0){
+        multi = cos(uMyUniforms.time/100 + (grassPositions[i].x+grassPositions[i].z))+0.8;
+    }
+    else{
+        multi = cos(uMyUniforms.time/50 + (grassPositions[i].x+grassPositions[i].z))+0.8;
+    }
+    let transformx = f32(grassPositions[i].x) + 0.1 * input.pos.y * multi * input.pos.y;
+    let transformz = f32(grassPositions[i].z); // + 0.05 * input.pos.y * multi; 
+    let transformed = vec4f(
+        input.pos.x + transformx, 
+        input.pos.y * grassPositions[i].y + hash, 
+        input.pos.z + transformz, 
+        1.0);
+    output.pos = 
+        uMyUniforms.projectionMatrix 
+        * uMyUniforms.viewMatrix 
+        * uMyUniforms.modelMatrix 
+        * transformed;
+    // Darken taller grass
+    output.col.r = input.col.r - (grassPositions[i].y - 1) * 0.3;
+    output.col.g = input.col.g - (grassPositions[i].y - 1) * 0.2;
+    output.col.b = input.col.b - (grassPositions[i].y - 1) * 0.3;
     return output;
 }
 
@@ -46,4 +57,41 @@ fn fragmentMain(in: VertexOutput) -> @location(0) vec4f {
     return vec4f(in.col, 1); // (Red, Green, Blue, Alpha)
 }
 
+// https://gist.github.com/munrocket/236ed5ba7e409b8bdf1ff6eca5dcdc39 
+// MIT License. © Stefan Gustavson, Munrocket
+//
+fn permute4(x: vec4f) -> vec4f { return ((x * 34. + 1.) * x) % vec4f(289.); }
+fn fade2(t: vec2f) -> vec2f { return t * t * t * (t * (t * 6. - 15.) + 10.); }
 
+fn perlinNoise2(P: vec2f) -> f32 {
+    var Pi: vec4f = floor(P.xyxy) + vec4f(0., 0., 1., 1.);
+    let Pf = fract(P.xyxy) - vec4f(0., 0., 1., 1.);
+    Pi = Pi % vec4f(289.); // To avoid truncation effects in permutation
+    let ix = Pi.xzxz;
+    let iy = Pi.yyww;
+    let fx = Pf.xzxz;
+    let fy = Pf.yyww;
+    let i = permute4(permute4(ix) + iy);
+    var gx: vec4f = 2. * fract(i * 0.0243902439) - 1.; // 1/41 = 0.024...
+    let gy = abs(gx) - 0.5;
+    let tx = floor(gx + 0.5);
+    gx = gx - tx;
+    var g00: vec2f = vec2f(gx.x, gy.x);
+    var g10: vec2f = vec2f(gx.y, gy.y);
+    var g01: vec2f = vec2f(gx.z, gy.z);
+    var g11: vec2f = vec2f(gx.w, gy.w);
+    let norm = 1.79284291400159 - 0.85373472095314 *
+        vec4f(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11));
+    g00 = g00 * norm.x;
+    g01 = g01 * norm.y;
+    g10 = g10 * norm.z;
+    g11 = g11 * norm.w;
+    let n00 = dot(g00, vec2f(fx.x, fy.x));
+    let n10 = dot(g10, vec2f(fx.y, fy.y));
+    let n01 = dot(g01, vec2f(fx.z, fy.z));
+    let n11 = dot(g11, vec2f(fx.w, fy.w));
+    let fade_xy = fade2(Pf.xy);
+    let n_x = mix(vec2f(n00, n01), vec2f(n10, n11), vec2f(fade_xy.x));
+    let n_xy = mix(n_x.x, n_x.y, fade_xy.y);
+    return 2.3 * n_xy;
+}

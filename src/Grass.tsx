@@ -33,7 +33,8 @@ function initEffect() {
 
     // Run compute shader once to generate buffer of grass positions
     // Create storage buffer for grass positions
-    const grassBladeCount = 64;
+    const grassBladeCount = 30000; // Dispatch groups (x * y * z) * threads (x * y * z),
+    // Example: 4 * 1 * 4 * 16 * 1 * 16 = 4096 blades
     const grassPositionsStorage = device.createBuffer({
       label: "Grass positions",
       size: 4 * grassBladeCount * 4, //4 bytes * 16 blades of grass * 4 floats per blade of grass (x,y,z,padding)
@@ -42,7 +43,7 @@ function initEffect() {
         GPUBufferUsage.COPY_DST |
         GPUBufferUsage.COPY_SRC,
     });
-    const WORKGROUP_SIZE = 8;
+    //const WORKGROUP_SIZE = 8;
     const backwards = new Uint32Array(grassBladeCount * 3);
     for (let i = 0; i < backwards.length; i++) {
       backwards[i] = 0; //128 - i;
@@ -99,7 +100,7 @@ function initEffect() {
     });
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, computeBindGroup);
-    pass.dispatchWorkgroups(1); // How many times to run the compute shader?
+    pass.dispatchWorkgroups(12, 1, 12); // How many times to run the compute shader?
     pass.end();
 
     // Encode a command to copy the results to a mappable buffer.
@@ -117,58 +118,78 @@ function initEffect() {
 
     // Read the results
     await resultBuffer.mapAsync(GPUMapMode.READ);
-    const result = new Uint32Array(resultBuffer.getMappedRange());
+    const result = new Float32Array(resultBuffer.getMappedRange());
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 4; i++) {
       console.log(
         `Blade ${i}: ${result[i * 4]}, ${result[i * 4 + 1]}, ${
           result[i * 4 + 2]
         }`
       );
     }
-    console.log("result", result);
-    console.log("result 95+", result.slice(97));
 
     resultBuffer.unmap();
 
-    // Render pyramids
-    // vertices for pyramid
+    const colors = [
+      { r: 243 / 255, g: 253 / 255, b: 214 / 255 },
+      { r: 166 / 255, g: 209 / 255, b: 161 / 255 },
+      { r: 90 / 255, g: 182 / 255, b: 136 / 255 },
+      { r: 24 / 255, g: 146 / 255, b: 157 / 255 },
+      //{ r: 91 / 255, g: 193 / 255, b: 39 / 255 },
+      //{ r: 70 / 255, g: 147 / 255, b: 30 / 255 },
+      //{ r: 51 / 255, g: 107 / 255, b: 21 / 255 },
+      //{ r: 31 / 255, g: 65 / 255, b: 13 / 255 },
+      //{ r: 178 / 255, g: 175 / 255, b: 255 / 255 },
+      //{ r: 97 / 255, g: 87 / 255, b: 180 / 255 },
+      //{ r: 63 / 255, g: 24 / 255, b: 158 / 255 },
+      //{ r: 25 / 255, g: 0 / 255, b: 76 / 255 },
+    ];
+
+    // Vertices for grass
     const vertices = new Float32Array([
       // X, Y, Z, R, G, B
-      0.8, // Top right 0
-      0.8,
+      0, // Vertex 0 Tip
+      0.9,
       0,
-      1,
+      colors[0].r,
+      colors[0].g,
+      colors[0].b,
+      0.03, // Vertex 1 R1
+      0.7,
       0,
-      0, // Top right
-      0.8, // Bottom right 1
-      -0.8,
+      colors[1].r,
+      colors[1].g,
+      colors[1].b,
+      0.05, // Vertex 2 R2
+      0.4,
+      0,
+      colors[2].r,
+      colors[2].g,
+      colors[2].b,
+      0.055, // Vertex 3 R3
       0,
       0,
-      1,
-      0, // Bottom right
-      -0.8, // Bottom left 2
-      -0.8,
+      colors[3].r,
+      colors[3].g,
+      colors[3].b,
+      -0.055, // Vertex 4 L3
       0,
       0,
+      colors[3].r,
+      colors[3].g,
+      colors[3].b,
+      -0.05, // Vertex 5 L2
+      0.4,
       0,
-      1, // Bottom left
-      -0.8, // Top left 3
-      0.8,
+      colors[2].r,
+      colors[2].g,
+      colors[2].b,
+      -0.03, // Vertex 6 L1
+      0.7,
       0,
-      1,
-      1,
-      0.2, // Top left
-      0, //Tip
-      0,
-      0.8,
-      1,
-      1,
-      1,
-
-      //0.8, 0.8, 0, 0.8, -0.8, 0, -0.8, -0.8, 0, //
-      //0.8, 0.8, 0, -0.8, 0.8, 0, -0.8, -0.8, 0,
-      //-0.5, -0.5, -0.3, 0.5, -0.5, -0.3, 0.5, 0.5, -0.3, -0.5, 0.5, -0.3, 0.0, 0.0, 0.5,
+      colors[1].r,
+      colors[1].g,
+      colors[1].b,
     ]);
     // create vertex buffer (now points)
     const vertexBuffer = device.createBuffer({
@@ -197,7 +218,7 @@ function initEffect() {
     };
 
     const indexes = new Uint32Array([
-      0, 1, 2, 0, 2, 3, 0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4,
+      0, 1, 6, 1, 5, 6, 1, 2, 5, 2, 4, 5, 2, 3, 4,
     ]);
     const indexBuffer = device.createBuffer({
       label: "Vertex indexes",
@@ -224,7 +245,7 @@ function initEffect() {
 
     // MODEL TRANSFORM
     // Scaling Matrix
-    const scale = 0.5;
+    const scale = 2.0;
     const S = mat4.scaling(vec3.create(scale, scale, scale));
     // Translate Object
     const T1 = mat4.translation(vec3.create(0.0, 0.0, 0.0)); //
@@ -262,8 +283,7 @@ function initEffect() {
     const T2 = mat4.translation(focalPoint);
 
     // Rotate viewpoint
-    const R2 = mat4.axisRotation(vec3.create(1, 0, 0), (7 * PI) / 4);
-    const viewRotation = mat4.axisRotation(vec3.create(1, 0, 0), -PI / 2);
+    const viewRotation = mat4.axisRotation(vec3.create(1, 0, 0), PI / 6);
     //const viewMatrix = mat4.mul(T2, R2); // T2 * R2
     const viewMatrix = mat4.mul(T2, viewRotation); // T2 * R2
 
@@ -402,7 +422,7 @@ function initEffect() {
         uniforms["time"].size
       );
       // Updating view
-      mat4.rotate(R1, vec3.create(0, 0, 1), -(0.01 * PI) / 4, R1);
+      //mat4.rotate(R1, vec3.create(0, 1, 0), -PI / 1200, R1);
       mat4.mul(mat4.mul(R1, T1), S, modelMatrix); //modelmatrix = R1 * T1 * S
       mat4.mul(TA, modelMatrix, modelMatrix);
       uniformData.set(modelMatrix, 32);
@@ -440,7 +460,7 @@ function initEffect() {
       pass.setVertexBuffer(0, vertexBuffer);
       pass.setBindGroup(0, bindGroup); //
       pass.setIndexBuffer(indexBuffer, "uint32", 0);
-      pass.drawIndexed(indexes.length, 16, 0, 0, 0); // second arg is instances to draw
+      pass.drawIndexed(indexes.length, grassBladeCount, 0, 0, 0); // second arg is instances to draw
       pass.end();
       const commandBuffer = encoder.finish();
 
@@ -461,53 +481,3 @@ function printMat4(mat: Mat4) {
     console.log(`${mat[i]}, ${mat[i + 1]}, ${mat[2 + i]}, ${mat[3 + i]}`);
   }
 }
-
-/*
-const aspectRatio = 1;
-      const focalLength = 1; //zoom?
-      const near = 0.01;
-      const far = 100.0;
-      const divider = 1 / (focalLength * (far - near));
-      const projectionMatrix = mat4.create(
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        ratio,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        far * divider,
-        -far * near * divider,
-        0.0,
-        0.0,
-        1.0 / focalLength,
-        0.0
-      );
-      mat4.transpose(projectionMatrix, projectionMatrix);
-
-      let angle2 = PI / 4.0; // pi/4 + pi
-      let c2 = Math.cos(angle2);
-      let s2 = Math.sin(angle2);
-      const R2 = mat4.create(
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        c2,
-        s2,
-        0.0,
-        0.0,
-        -s2,
-        c2,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      );
-      mat4.transpose(R2, R2);
-*/
