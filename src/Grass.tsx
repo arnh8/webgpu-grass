@@ -2,11 +2,75 @@ import { useEffect, useRef } from "react";
 import grassWGSL from "./Grass.wgsl?raw";
 import grassPosWGSL from "./grassPos.wgsl?raw";
 import { vec3, mat4, Mat4 } from "wgpu-matrix";
+import { FolderApi, Pane } from "tweakpane";
 
 export default function Grass() {
   const ref = useRef(null);
   useEffect(initEffect, []);
   return <div ref={ref} />;
+}
+
+type grassParameters = {
+  color1: { r: number; g: number; b: number };
+  color2: { r: number; g: number; b: number };
+  color3: { r: number; g: number; b: number };
+  color4: { r: number; g: number; b: number };
+  density: number;
+  xz_variance: number;
+  y_variance: number;
+  y_height: number;
+  scale: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+function buildVertices(params: grassParameters) {
+  return new Float32Array([
+    // X, Y, Z, R, G, B
+    0, // Vertex 0 Tip
+    0.9,
+    0,
+    params.color1.r / 255,
+    params.color1.g / 255,
+    params.color1.b / 255,
+    0.03, // Vertex 1 R1
+    0.7,
+    0,
+    params.color2.r / 255,
+    params.color2.g / 255,
+    params.color2.b / 255,
+    0.05, // Vertex 2 R2
+    0.4,
+    0,
+    params.color3.r / 255,
+    params.color3.g / 255,
+    params.color3.b / 255,
+    0.055, // Vertex 3 R3
+    0,
+    0,
+    params.color4.r / 255,
+    params.color4.g / 255,
+    params.color4.b / 255,
+    -0.055, // Vertex 4 L3
+    0,
+    0,
+    params.color4.r / 255,
+    params.color4.g / 255,
+    params.color4.b / 255,
+    -0.05, // Vertex 5 L2
+    0.4,
+    0,
+    params.color3.r / 255,
+    params.color3.g / 255,
+    params.color3.b / 255,
+    -0.03, // Vertex 6 L1
+    0.7,
+    0,
+    params.color2.r / 255,
+    params.color2.g / 255,
+    params.color2.b / 255,
+  ]);
 }
 
 function initEffect() {
@@ -30,10 +94,29 @@ function initEffect() {
     root?.appendChild(canvas);
     const context = canvas.getContext("webgpu");
     if (!context) return;
+    // Manage gui
+    const guiWrapper = document.createElement("div");
+    root?.appendChild(guiWrapper);
 
-    // Run compute shader once to generate buffer of grass positions
+    const PARAMS = {
+      color1: { r: 243, g: 253, b: 214 },
+      color2: { r: 166, g: 209, b: 161 },
+      color3: { r: 90, g: 182, b: 136 },
+      color4: { r: 24, g: 146, b: 157 },
+      density: 10,
+      xz_variance: 1.7,
+      y_variance: 0.25,
+      y_height: 0.65,
+      scale: 1.0,
+      x: 1.0,
+      y: 1.0,
+      z: 1.0,
+    };
+
+    const pane = initTweakPane(PARAMS, guiWrapper);
+
     // Create storage buffer for grass positions
-    const grassBladeCount = 30000; // Dispatch groups (x * y * z) * threads (x * y * z),
+    const grassBladeCount = 40000; // Dispatch groups (x * y * z) * threads (x * y * z),
     // Example: 4 * 1 * 4 * 16 * 1 * 16 = 4096 blades
     const grassPositionsStorage = device.createBuffer({
       label: "Grass positions",
@@ -43,23 +126,27 @@ function initEffect() {
         GPUBufferUsage.COPY_DST |
         GPUBufferUsage.COPY_SRC,
     });
-    //const WORKGROUP_SIZE = 8;
-    const backwards = new Uint32Array(grassBladeCount * 3);
-    for (let i = 0; i < backwards.length; i++) {
-      backwards[i] = 0; //128 - i;
-    }
-    device.queue.writeBuffer(grassPositionsStorage, 0, backwards);
-    // create a buffer on the GPU to get a copy of the results
-    const resultBuffer = device.createBuffer({
-      label: "result buffer",
-      size: 4 * grassBladeCount * 4,
-      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+
+    const computeUniforms = {
+      // Size and offset (in floats) of uniform data within
+      // the uniform buffer and in computeUniformData array.
+      density: { size: 1, offset: 0 },
+      xz_variance: { size: 1, offset: 1 },
+      y_variance: { size: 1, offset: 2 },
+      y_height: { size: 1, offset: 3 },
+    };
+
+    const computeUniformData = new Float32Array(4);
+    const computeUniformBuffer = device.createBuffer({
+      label: "My uniforms",
+      size: 4 * computeUniformData.length, // 4 bytes * ...
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
     // Create a compute shader that generates mat4x4s of grass positions
     // and puts it in grasspositionsstorage
     const grassPosShaderModule = device.createShaderModule({
-      label: "Grass Positions Compute Shader",
+      label: "GrassPos Compute Shader",
       code: grassPosWGSL,
     });
 
@@ -71,13 +158,17 @@ function initEffect() {
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: "storage" },
         },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: {} },
       ],
     });
 
     const computeBindGroup = device.createBindGroup({
       label: "Compute Bind Group",
       layout: computeBindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: grassPositionsStorage } }],
+      entries: [
+        { binding: 0, resource: { buffer: grassPositionsStorage } },
+        { binding: 1, resource: { buffer: computeUniformBuffer } },
+      ],
     });
 
     const computePipelineLayout = device.createPipelineLayout({
@@ -92,43 +183,33 @@ function initEffect() {
     });
 
     // Run compute pass
-    const encoder = device.createCommandEncoder({
-      label: "doubling encoder",
-    });
-    const pass = encoder.beginComputePass({
-      label: "doubling compute pass",
-    });
-    pass.setPipeline(computePipeline);
-    pass.setBindGroup(0, computeBindGroup);
-    pass.dispatchWorkgroups(12, 1, 12); // How many times to run the compute shader?
-    pass.end();
-
-    // Encode a command to copy the results to a mappable buffer.
-    encoder.copyBufferToBuffer(
-      grassPositionsStorage,
-      0,
-      resultBuffer,
-      0,
-      resultBuffer.size
-    );
-
-    // Finish encoding and submit the commands
-    const commandBuffer = encoder.finish();
-    device.queue.submit([commandBuffer]);
-
-    // Read the results
-    await resultBuffer.mapAsync(GPUMapMode.READ);
-    const result = new Float32Array(resultBuffer.getMappedRange());
-
-    for (let i = 0; i < 4; i++) {
-      console.log(
-        `Blade ${i}: ${result[i * 4]}, ${result[i * 4 + 1]}, ${
-          result[i * 4 + 2]
-        }`
-      );
+    function runComputePass() {
+      // Update uniforms with parameters
+      computeUniformData[0] = PARAMS.density;
+      computeUniformData[1] = PARAMS.xz_variance;
+      computeUniformData[2] = PARAMS.y_variance;
+      computeUniformData[3] = PARAMS.y_height;
+      device.queue.writeBuffer(computeUniformBuffer, 0, computeUniformData);
+      // Run compute pass
+      const encoder = device.createCommandEncoder({
+        label: "doubling encoder",
+      });
+      const pass = encoder.beginComputePass({
+        label: "doubling compute pass",
+      });
+      pass.setPipeline(computePipeline);
+      pass.setBindGroup(0, computeBindGroup);
+      pass.dispatchWorkgroups(12, 1, 18); // How many times to run the compute shader?
+      pass.end();
+      device.queue.submit([encoder.finish()]);
     }
 
-    resultBuffer.unmap();
+    runComputePass();
+    const cFolder: FolderApi = pane.children[1] as FolderApi;
+    cFolder.on("change", () => {
+      console.log("wah");
+      runComputePass();
+    });
 
     const colors = [
       { r: 243 / 255, g: 253 / 255, b: 214 / 255 },
@@ -146,51 +227,7 @@ function initEffect() {
     ];
 
     // Vertices for grass
-    const vertices = new Float32Array([
-      // X, Y, Z, R, G, B
-      0, // Vertex 0 Tip
-      0.9,
-      0,
-      colors[0].r,
-      colors[0].g,
-      colors[0].b,
-      0.03, // Vertex 1 R1
-      0.7,
-      0,
-      colors[1].r,
-      colors[1].g,
-      colors[1].b,
-      0.05, // Vertex 2 R2
-      0.4,
-      0,
-      colors[2].r,
-      colors[2].g,
-      colors[2].b,
-      0.055, // Vertex 3 R3
-      0,
-      0,
-      colors[3].r,
-      colors[3].g,
-      colors[3].b,
-      -0.055, // Vertex 4 L3
-      0,
-      0,
-      colors[3].r,
-      colors[3].g,
-      colors[3].b,
-      -0.05, // Vertex 5 L2
-      0.4,
-      0,
-      colors[2].r,
-      colors[2].g,
-      colors[2].b,
-      -0.03, // Vertex 6 L1
-      0.7,
-      0,
-      colors[1].r,
-      colors[1].g,
-      colors[1].b,
-    ]);
+    const vertices = buildVertices(PARAMS);
     // create vertex buffer (now points)
     const vertexBuffer = device.createBuffer({
       label: "Cell vertices",
@@ -198,6 +235,18 @@ function initEffect() {
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/ 0, vertices);
+
+    function updateVerts() {
+      // Vertices for grass
+      const vertices = buildVertices(PARAMS);
+      device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/ 0, vertices);
+    }
+    pane.on("change", (ev) => {
+      if (ev.last) {
+        console.log("Updating verts");
+        updateVerts();
+      }
+    });
 
     // define vertex layout
     const vertexBufferLayout: GPUVertexBufferLayout = {
@@ -295,7 +344,7 @@ function initEffect() {
     const projectionMatrix = mat4.perspective(fov, aspectRatio, near, far);
 
     const uniforms = {
-      // Size and offset (in floats) of uniform data withiin
+      // Size and offset (in floats) of uniform data within
       // the uniform buffer and in uniformData array.
       projection: { size: 16, offset: 0 },
       view: { size: 16, offset: 16 },
@@ -480,4 +529,33 @@ function printMat4(mat: Mat4) {
   for (let i = 0; i < 16; i += 4) {
     console.log(`${mat[i]}, ${mat[i + 1]}, ${mat[2 + i]}, ${mat[3 + i]}`);
   }
+}
+
+function initTweakPane(params: grassParameters, div: HTMLDivElement) {
+  const pane = new Pane({ title: "Parameters", container: div });
+  const f1 = pane.addFolder({
+    title: "Colors",
+  });
+  f1.addBinding(params, "color1");
+  f1.addBinding(params, "color2");
+  f1.addBinding(params, "color3");
+  f1.addBinding(params, "color4");
+
+  const f2 = pane.addFolder({
+    title: "Compute parameters",
+  });
+  f2.addBinding(params, "density", { view: "slider", min: 2, max: 14 });
+  f2.addBinding(params, "xz_variance", { view: "slider", min: -2, max: 2 });
+  f2.addBinding(params, "y_variance", { view: "slider", min: 0, max: 1.5 });
+  f2.addBinding(params, "y_height", { view: "slider", min: 0, max: 2 });
+
+  const f3 = pane.addFolder({
+    title: "View",
+  });
+  f3.addBinding(params, "scale", { view: "slider", min: 0.01, max: 3 });
+  f3.addBinding(params, "x", { view: "slider", min: -2, max: 2 });
+  f3.addBinding(params, "y", { view: "slider", min: -2, max: 2 });
+  f3.addBinding(params, "z", { view: "slider", min: -2, max: 2 });
+
+  return pane;
 }

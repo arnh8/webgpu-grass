@@ -1,4 +1,12 @@
+struct computeUniforms {
+    udensity: f32,
+    uxz_variance: f32,
+    uy_variance: f32,
+    uy_height: f32,
+}
+
 @group(0) @binding(0) var<storage, read_write> grassPositions: array<vec3<f32>>;
+@group(0) @binding(1) var<uniform> cUniforms: computeUniforms;
 
 const WG_SIZE_X = 8;
 const WG_SIZE_Y = 1;
@@ -6,8 +14,8 @@ const WG_SIZE_Z = 8;
 const numThreadsPerWorkgroup = WG_SIZE_X * WG_SIZE_Z;
 
 const OFFSET = 3.5;
-const DENSITY = 10;
-const XZVARIANCE = 0.4;
+const DENSITY = 12.1;
+const XZVARIANCE = 0.7;
 const YVARIANCE = 0.25;
 const YHEIGHT = 0.65;
 
@@ -30,12 +38,14 @@ fn computeMain(
 
     var xPos = f32(local_invocation_id.x + workgroup_id.x * WG_SIZE_X);
     var zPos = f32(local_invocation_id.z + workgroup_id.z * WG_SIZE_Z);
-    xPos = xPos / DENSITY - OFFSET - 1.3;
-    zPos = zPos / DENSITY - OFFSET - 4.0;
+    xPos = xPos / cUniforms.udensity - OFFSET - 0.0;
+    zPos = zPos / cUniforms.udensity - OFFSET - 5.8;
 
-    let yPos = simplexNoise2(vec2f(xPos, zPos)) * YVARIANCE + YHEIGHT;
-    xPos = xPos + XZVARIANCE * simplexNoise2(vec2f(xPos, zPos));
-    zPos = zPos + XZVARIANCE * simplexNoise2(vec2f(xPos, zPos));
+    let simplexHash = simplexNoise2(vec2f(xPos, zPos));
+
+    let yPos = simplexHash * cUniforms.uy_variance + cUniforms.uy_height;
+    xPos = xPos + cUniforms.uxz_variance * simplexHash;
+    zPos = zPos + cUniforms.uxz_variance * simplexHash;
     grassPositions[global_invocation_index] = vec3f(xPos, yPos, zPos);
 }
 

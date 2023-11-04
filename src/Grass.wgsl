@@ -29,6 +29,7 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
     var multi: f32 = 0.0;
     if(hash < 0){
         multi = cos(uMyUniforms.time/100 + (grassPositions[i].x+grassPositions[i].z))+0.8;
+        // can be made more efficient by sampling a noise texture
     }
     else{
         multi = cos(uMyUniforms.time/50 + (grassPositions[i].x+grassPositions[i].z))+0.8;
