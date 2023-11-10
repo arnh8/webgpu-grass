@@ -28,28 +28,35 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
     let hash = perlinNoise2(vec2f(grassPositions[i].x * 0.1, grassPositions[i].z* 0.1));
     var multi: f32 = 0.0;
     if(hash < 0){
-        multi = cos(uMyUniforms.time/100 + (grassPositions[i].x+grassPositions[i].z))+0.8;
+        multi = cos(uMyUniforms.time / 2 + (grassPositions[i].x+grassPositions[i].z))+0.8;
         // can be made more efficient by sampling a noise texture
     }
     else{
-        multi = cos(uMyUniforms.time/50 + (grassPositions[i].x+grassPositions[i].z))+0.8;
+        multi = cos(uMyUniforms.time + (grassPositions[i].x+grassPositions[i].z))+0.8;
     }
+
+    // Rotate a little
+    let rotangle = f32(i);
+    let tempx = sin(rotangle) * input.pos.z + cos(rotangle) * input.pos.x;
+    let tempz = cos(rotangle) * input.pos.z - sin(rotangle) * input.pos.x;
+
     let transformx = f32(grassPositions[i].x) + 0.1 * input.pos.y * multi * input.pos.y;
     let transformz = f32(grassPositions[i].z); // + 0.05 * input.pos.y * multi; 
-    let transformed = vec4f(
-        input.pos.x + transformx, 
+    output.pos = vec4f(
+        tempx + transformx, 
         input.pos.y * grassPositions[i].y + hash, 
-        input.pos.z + transformz, 
+        tempz + transformz, 
         1.0);
+
     output.pos = 
         uMyUniforms.projectionMatrix 
         * uMyUniforms.viewMatrix 
         * uMyUniforms.modelMatrix 
-        * transformed;
+        * output.pos;
     // Darken taller grass
-    output.col.r = input.col.r - (grassPositions[i].y - 1) * 0.3;
+    output.col.r = input.col.r - (grassPositions[i].y - 1) * 0.2;
     output.col.g = input.col.g - (grassPositions[i].y - 1) * 0.2;
-    output.col.b = input.col.b - (grassPositions[i].y - 1) * 0.3;
+    output.col.b = input.col.b - (grassPositions[i].y - 1) * 0.2;
     return output;
 }
 
