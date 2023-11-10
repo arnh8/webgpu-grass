@@ -23,6 +23,10 @@ type grassParameters = {
   x: number;
   y: number;
   z: number;
+  x_rotation: number;
+  y_rotation: number;
+  z_rotation: number;
+  orthographic_perspective: boolean;
 };
 
 function buildVertices(params: grassParameters) {
@@ -99,6 +103,25 @@ function initEffect() {
     root?.appendChild(guiWrapper);
 
     const PARAMS = {
+      color1: { r: 69, g: 134, b: 54 },
+      color2: { r: 67, g: 121, b: 61 },
+      color3: { r: 46, g: 89, b: 67 },
+      color4: { r: 32, g: 78, b: 83 },
+      density: 10,
+      xz_variance: 1.7,
+      y_variance: 0.4,
+      y_height: 1.3,
+      scale: 1.0,
+      x: 0.0,
+      y: 0.0,
+      z: -5.0,
+      x_rotation: 25,
+      y_rotation: 0,
+      z_rotation: 0,
+      orthographic_perspective: false,
+    };
+    /*
+    const PARAMS = {
       color1: { r: 243, g: 253, b: 214 },
       color2: { r: 166, g: 209, b: 161 },
       color3: { r: 90, g: 182, b: 136 },
@@ -112,6 +135,7 @@ function initEffect() {
       y: 1.0,
       z: 1.0,
     };
+    */
 
     const pane = initTweakPane(PARAMS, guiWrapper);
 
@@ -203,32 +227,15 @@ function initEffect() {
       pass.end();
       device.queue.submit([encoder.finish()]);
     }
-
     runComputePass();
+
     const cFolder: FolderApi = pane.children[1] as FolderApi;
     cFolder.on("change", () => {
-      console.log("wah");
       runComputePass();
     });
 
-    const colors = [
-      { r: 243 / 255, g: 253 / 255, b: 214 / 255 },
-      { r: 166 / 255, g: 209 / 255, b: 161 / 255 },
-      { r: 90 / 255, g: 182 / 255, b: 136 / 255 },
-      { r: 24 / 255, g: 146 / 255, b: 157 / 255 },
-      //{ r: 91 / 255, g: 193 / 255, b: 39 / 255 },
-      //{ r: 70 / 255, g: 147 / 255, b: 30 / 255 },
-      //{ r: 51 / 255, g: 107 / 255, b: 21 / 255 },
-      //{ r: 31 / 255, g: 65 / 255, b: 13 / 255 },
-      //{ r: 178 / 255, g: 175 / 255, b: 255 / 255 },
-      //{ r: 97 / 255, g: 87 / 255, b: 180 / 255 },
-      //{ r: 63 / 255, g: 24 / 255, b: 158 / 255 },
-      //{ r: 25 / 255, g: 0 / 255, b: 76 / 255 },
-    ];
-
     // Vertices for grass
-    const vertices = buildVertices(PARAMS);
-    // create vertex buffer (now points)
+    let vertices = buildVertices(PARAMS);
     const vertexBuffer = device.createBuffer({
       label: "Cell vertices",
       size: vertices.byteLength,
@@ -237,28 +244,28 @@ function initEffect() {
     device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/ 0, vertices);
 
     function updateVerts() {
-      // Vertices for grass
-      const vertices = buildVertices(PARAMS);
+      vertices = buildVertices(PARAMS);
       device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/ 0, vertices);
     }
-    pane.on("change", (ev) => {
+
+    const colorFolder: FolderApi = pane.children[0] as FolderApi;
+    colorFolder.on("change", (ev) => {
       if (ev.last) {
-        console.log("Updating verts");
         updateVerts();
       }
     });
 
-    // define vertex layout
+    // Define vertex layout
     const vertexBufferLayout: GPUVertexBufferLayout = {
       arrayStride: 24, //1 32float = 4 bytes, 3 floats is 12
       attributes: [
         {
-          format: "float32x3",
+          format: "float32x3", // 3 floats per vertex
           offset: 0,
           shaderLocation: 0, // This 0 corresponds to @location(0) in vertex shader
         },
         {
-          format: "float32x3",
+          format: "float32x3", // 3 floats for color
           offset: 12,
           shaderLocation: 1, // This 1 corresponds to @location(1) in vertex shader
         },
@@ -276,9 +283,8 @@ function initEffect() {
     });
     device.queue.writeBuffer(indexBuffer, /*bufferOffset=*/ 0, indexes);
 
-    //Write shaders
     const cellShaderModule = device.createShaderModule({
-      label: "Cell shader",
+      label: "Grass Shader",
       code: grassWGSL,
     });
 
@@ -289,50 +295,22 @@ function initEffect() {
     });
 
     // Create uniform buffer for everything
-    const time = new Float32Array([0]);
-    const PI = 3.14159265358979323846;
+    const time = new Float32Array([0.0]);
 
     // MODEL TRANSFORM
-    // Scaling Matrix
-    const scale = 2.0;
-    const S = mat4.scaling(vec3.create(scale, scale, scale));
-    // Translate Object
-    const T1 = mat4.translation(vec3.create(0.0, 0.0, 0.0)); //
-
-    // Rotate object
-    let angle1 = time[0];
-    let c1 = Math.cos(angle1);
-    let s1 = Math.sin(angle1);
-    const R1 = mat4.create(
-      c1,
-      s1,
-      0.0,
-      0.0,
-      -s1,
-      c1,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0
+    const S = mat4.scaling(
+      vec3.create(PARAMS.scale, PARAMS.scale, PARAMS.scale)
     );
-    mat4.transpose(R1, R1);
-    //R1 * T1 * S
+    const T1 = mat4.translation(vec3.create(0.0, 0.0, 0.0)); //
+    const R1 = mat4.rotation(vec3.create(0, 0, 1), 0);
+    // Model transform = Rotation * Translation * Scale
     const modelMatrix = mat4.mul(mat4.mul(R1, T1), S);
-    //mat4.transpose(modelMatrix, modelMatrix);
-    const TA = mat4.translation(vec3.create(0.0, 0.0, -1.0));
 
     // VIEW TRANSFORM
     const focalPoint = vec3.create(0.0, 0.0, -5.0);
     const T2 = mat4.translation(focalPoint);
-
     // Rotate viewpoint
-    const viewRotation = mat4.axisRotation(vec3.create(1, 0, 0), PI / 6);
+    const viewRotation = mat4.axisRotation(vec3.create(1, 0, 0), Math.PI / 6);
     //const viewMatrix = mat4.mul(T2, R2); // T2 * R2
     const viewMatrix = mat4.mul(T2, viewRotation); // T2 * R2
 
@@ -340,16 +318,17 @@ function initEffect() {
     const aspectRatio = 1;
     const near = 0.01;
     const far = 100.0;
-    const fov = PI / 2;
+    const fov = Math.PI / 2;
     const projectionMatrix = mat4.perspective(fov, aspectRatio, near, far);
+    const orthprojectionMatrix = mat4.ortho(-1, 1, -1, 1, near, far);
 
-    const uniforms = {
-      // Size and offset (in floats) of uniform data within
-      // the uniform buffer and in uniformData array.
-      projection: { size: 16, offset: 0 },
-      view: { size: 16, offset: 16 },
-      modelview: { size: 16, offset: 32 },
-      time: { size: 1, offset: 48 },
+    const uStructure = {
+      // Size (in floats) and offset (in floats * 4bytes) of uniform data
+      // in the uniform buffer and in uniformData array.
+      projection: { SIZE: 16, OFF: 0 * 4 },
+      view: { SIZE: 16, OFF: 16 * 4 },
+      modelview: { SIZE: 16, OFF: 32 * 4 },
+      time: { SIZE: 1, OFF: 48 * 4 },
     };
 
     const uniformData = new Float32Array(52); // 16+16+16+1(technically 4) = 52
@@ -357,7 +336,6 @@ function initEffect() {
     uniformData.set(viewMatrix, 16);
     uniformData.set(modelMatrix, 32);
     uniformData[48] = time[0];
-
     // Pmatrix is 16 f32s, so thats 4 bytes * 16, = 64 bytes
     // Vmatrix is 64 bytes, and so is modelmatrix, time is 1 f32 aka 4 bytes
     const uniformBuffer = device.createBuffer({
@@ -367,21 +345,79 @@ function initEffect() {
     });
     device.queue.writeBuffer(uniformBuffer, 0, uniformData);
 
+    function updateModel() {
+      const S = mat4.scaling(
+        vec3.create(PARAMS.scale, PARAMS.scale, PARAMS.scale)
+      );
+      const T1 = mat4.translation(vec3.create(0.0, 0.0, 0.0)); //
+      const R1 = mat4.rotation(vec3.create(0, 0, 1), 0);
+      // Model transform = Rotation * Translation * Scale
+      const modelMatrix = mat4.mul(mat4.mul(R1, T1), S);
+      uniformData.set(modelMatrix, 32);
+      device.queue.writeBuffer(uniformBuffer, 0, uniformData); // todo: write to this properly
+    }
+
+    const modelFolder: FolderApi = pane.children[2] as FolderApi;
+    modelFolder.on("change", () => {
+      updateModel();
+    });
+
+    function updateView() {
+      const translate = mat4.translation(
+        vec3.create(PARAMS.x, PARAMS.y, PARAMS.z)
+      );
+      // Rotate viewpoint
+      const xRotation = mat4.axisRotation(
+        vec3.create(1, 0, 0),
+        (PARAMS.x_rotation / 180) * Math.PI
+      );
+      const yRotation = mat4.axisRotation(
+        vec3.create(0, 1, 0),
+        (PARAMS.y_rotation / 180) * Math.PI
+      );
+      const zRotation = mat4.axisRotation(
+        vec3.create(0, 0, 1),
+        (PARAMS.z_rotation / 180) * Math.PI
+      );
+      const viewMatrix = mat4.mul(translate, xRotation);
+      mat4.mul(viewMatrix, yRotation, viewMatrix);
+      mat4.mul(viewMatrix, zRotation, viewMatrix);
+      uniformData.set(viewMatrix, 16);
+      device.queue.writeBuffer(uniformBuffer, 0, uniformData); // todo: write to this properly
+    }
+
+    const viewFolder: FolderApi = pane.children[3] as FolderApi;
+    viewFolder.on("change", () => {
+      updateView();
+    });
+
+    function updateProjection() {
+      if (PARAMS.orthographic_perspective) {
+        uniformData.set(orthprojectionMatrix, 0);
+      } else {
+        uniformData.set(projectionMatrix, 0);
+      }
+      device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+    }
+
+    const projFolder: FolderApi = pane.children[4] as FolderApi;
+    projFolder.on("change", () => {
+      updateProjection();
+    });
+
     // Create the bind group layout and pipeline layout.
     const bindGroupLayout = device.createBindGroupLayout({
       label: "Time Bind Group Layout",
       entries: [
         {
-          binding: 0, // orresponds to binding(0) in shaders
+          binding: 0, // corresponds to binding(0) in shaders
           visibility: GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
-          //| GPUShaderStage.FRAGMENT,
-          buffer: {}, // Grid uniform buffer
+          buffer: {}, // uniform buffer
         },
         {
-          binding: 1, // orresponds to binding(0) in shaders
+          binding: 1, // corresponds to binding(1) in shaders
           visibility: GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
-          //| GPUShaderStage.FRAGMENT,
-          buffer: { type: "read-only-storage" }, // Grid uniform buffer
+          buffer: { type: "read-only-storage" }, // Grass pos buffer
         },
       ],
     });
@@ -455,33 +491,20 @@ function initEffect() {
 
     //Set up rendering loop
     const UPDATE_INTERVAL = 16; // Update every 200ms (5 times/sec)
-    let step = 0; // Track how many loops have been run
     function updateGrid() {
       if (!context) return;
       const encoder = device.createCommandEncoder();
-      step++;
-      // Update uniform buffer
+
       // Updating time
-      time[0] = step;
+      time[0] += 0.02;
       device.queue.writeBuffer(
         uniformBuffer,
-        uniforms["time"].offset * 4,
+        uStructure.time.OFF,
         time,
         0,
-        uniforms["time"].size
+        uStructure.time.SIZE
       );
-      // Updating view
-      //mat4.rotate(R1, vec3.create(0, 1, 0), -PI / 1200, R1);
-      mat4.mul(mat4.mul(R1, T1), S, modelMatrix); //modelmatrix = R1 * T1 * S
-      mat4.mul(TA, modelMatrix, modelMatrix);
-      uniformData.set(modelMatrix, 32);
-      device.queue.writeBuffer(
-        uniformBuffer,
-        uniforms["modelview"].offset * 4,
-        uniformData,
-        32,
-        uniforms["modelview"].size
-      );
+
       // Render pass start
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -550,12 +573,24 @@ function initTweakPane(params: grassParameters, div: HTMLDivElement) {
   f2.addBinding(params, "y_height", { view: "slider", min: 0, max: 2 });
 
   const f3 = pane.addFolder({
-    title: "View",
+    title: "Model",
   });
   f3.addBinding(params, "scale", { view: "slider", min: 0.01, max: 3 });
-  f3.addBinding(params, "x", { view: "slider", min: -2, max: 2 });
-  f3.addBinding(params, "y", { view: "slider", min: -2, max: 2 });
-  f3.addBinding(params, "z", { view: "slider", min: -2, max: 2 });
+
+  const f4 = pane.addFolder({
+    title: "View",
+  });
+  f4.addBinding(params, "x", { view: "slider", min: -2, max: 2 });
+  f4.addBinding(params, "y", { view: "slider", min: -2, max: 2 });
+  f4.addBinding(params, "z", { view: "slider", min: -10, max: 10 });
+  f4.addBinding(params, "x_rotation", { view: "slider", min: 0, max: 360 });
+  f4.addBinding(params, "y_rotation", { view: "slider", min: 0, max: 360 });
+  f4.addBinding(params, "z_rotation", { view: "slider", min: 0, max: 360 });
+
+  const f5 = pane.addFolder({
+    title: "Projection",
+  });
+  f5.addBinding(params, "orthographic_perspective", { view: "boolean" });
 
   return pane;
 }
