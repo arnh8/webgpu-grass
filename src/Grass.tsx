@@ -7,7 +7,7 @@ import { FolderApi, Pane } from "tweakpane";
 export default function Grass() {
   const ref = useRef(null);
   useEffect(initEffect, []);
-  return <div ref={ref} />;
+  return <div ref={ref} id="grassDiv" />;
 }
 
 type grassParameters = {
@@ -26,6 +26,7 @@ type grassParameters = {
   x_rotation: number;
   y_rotation: number;
   z_rotation: number;
+  auto_rotate: boolean;
   orthographic_perspective: boolean;
 };
 
@@ -81,8 +82,22 @@ function initEffect() {
   let mounted = true;
   (async () => {
     if (!navigator.gpu) {
+      const root = document.getElementById("root");
+      const p = document.createElement("p");
+      p.innerText = "This browser doesn't support WebGPU";
+      root?.appendChild(p);
       const e = "This browser does not support WebGPU.";
       throw new Error(e);
+    }
+    try {
+      await navigator.gpu.requestAdapter();
+    } catch (error) {
+      const root = document.getElementById("root");
+      const p = document.createElement("p");
+      p.innerText =
+        "Could not request GPUAdapter. Does this browser support WebGPU?";
+      root?.appendChild(p);
+      return;
     }
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
@@ -90,10 +105,10 @@ function initEffect() {
     }
     const device = await adapter.requestDevice();
     if (!mounted) return;
-    const root = document.getElementById("root");
+    const root = document.getElementById("grassDiv");
     const canvas = document.createElement("canvas");
     canvas.id = "grassCanvas";
-    canvas.width = 700;
+    canvas.width = 1000;
     canvas.height = 700;
     root?.appendChild(canvas);
     const context = canvas.getContext("webgpu");
@@ -115,10 +130,11 @@ function initEffect() {
       x: 0.0,
       y: 0.0,
       z: -5.0,
-      x_rotation: 25,
+      x_rotation: 24,
       y_rotation: 0,
       z_rotation: 0,
       orthographic_perspective: false,
+      auto_rotate: false,
     };
     /*
     const PARAMS = {
@@ -140,8 +156,10 @@ function initEffect() {
     const pane = initTweakPane(PARAMS, guiWrapper);
 
     // Create storage buffer for grass positions
-    const grassBladeCount = 40000; // Dispatch groups (x * y * z) * threads (x * y * z),
-    // Example: 4 * 1 * 4 * 16 * 1 * 16 = 4096 blades
+    const DISPATCH_X = 16;
+    const DISPATCH_Z = 16;
+    const grassBladeCount = DISPATCH_X * DISPATCH_Z * 64; // Dispatch groups (x * y * z) * threads (x * y * z),
+    // Example: 16 * 1 * 16 * 8 * 1 * 8 = 16384 blades
     const grassPositionsStorage = device.createBuffer({
       label: "Grass positions",
       size: 4 * grassBladeCount * 4, //4 bytes * 16 blades of grass * 4 floats per blade of grass (x,y,z,padding)
@@ -223,7 +241,8 @@ function initEffect() {
       });
       pass.setPipeline(computePipeline);
       pass.setBindGroup(0, computeBindGroup);
-      pass.dispatchWorkgroups(12, 1, 18); // How many times to run the compute shader?
+      pass.dispatchWorkgroups(DISPATCH_X, 1, DISPATCH_Z); // How many times to run the compute shader?
+      // todo: tweakpane dispatch groups
       pass.end();
       device.queue.submit([encoder.finish()]);
     }
@@ -307,15 +326,17 @@ function initEffect() {
     const modelMatrix = mat4.mul(mat4.mul(R1, T1), S);
 
     // VIEW TRANSFORM
-    const focalPoint = vec3.create(0.0, 0.0, -5.0);
-    const T2 = mat4.translation(focalPoint);
-    // Rotate viewpoint
-    const viewRotation = mat4.axisRotation(vec3.create(1, 0, 0), Math.PI / 6);
-    //const viewMatrix = mat4.mul(T2, R2); // T2 * R2
-    const viewMatrix = mat4.mul(T2, viewRotation); // T2 * R2
+    const viewTranslation = mat4.translation(
+      vec3.create(PARAMS.x, PARAMS.y, PARAMS.z)
+    );
+    const viewRotation = mat4.axisRotation(
+      vec3.create(1, 0, 0),
+      (PARAMS.x_rotation * Math.PI) / 180
+    );
+    const viewMatrix = mat4.mul(viewTranslation, viewRotation); // T2 * R2
 
     // PROJECTION
-    const aspectRatio = 1;
+    const aspectRatio = canvas.width / canvas.height;
     const near = 0.01;
     const far = 100.0;
     const fov = Math.PI / 2;
@@ -325,7 +346,7 @@ function initEffect() {
     const uStructure = {
       // Size (in floats) and offset (in floats * 4bytes) of uniform data
       // in the uniform buffer and in uniformData array.
-      projection: { SIZE: 16, OFF: 0 * 4 },
+      projection: { SIZE: 16, OFF: 0 * 4 }, //16 f32s for a 4x4mat
       view: { SIZE: 16, OFF: 16 * 4 },
       modelview: { SIZE: 16, OFF: 32 * 4 },
       time: { SIZE: 1, OFF: 48 * 4 },
@@ -336,8 +357,7 @@ function initEffect() {
     uniformData.set(viewMatrix, 16);
     uniformData.set(modelMatrix, 32);
     uniformData[48] = time[0];
-    // Pmatrix is 16 f32s, so thats 4 bytes * 16, = 64 bytes
-    // Vmatrix is 64 bytes, and so is modelmatrix, time is 1 f32 aka 4 bytes
+
     const uniformBuffer = device.createBuffer({
       label: "My uniforms",
       size: 4 * uniformData.length, // 4 bytes * 52
@@ -366,7 +386,6 @@ function initEffect() {
       const translate = mat4.translation(
         vec3.create(PARAMS.x, PARAMS.y, PARAMS.z)
       );
-      // Rotate viewpoint
       const xRotation = mat4.axisRotation(
         vec3.create(1, 0, 0),
         (PARAMS.x_rotation / 180) * Math.PI
@@ -379,9 +398,9 @@ function initEffect() {
         vec3.create(0, 0, 1),
         (PARAMS.z_rotation / 180) * Math.PI
       );
-      const viewMatrix = mat4.mul(translate, xRotation);
-      mat4.mul(viewMatrix, yRotation, viewMatrix);
-      mat4.mul(viewMatrix, zRotation, viewMatrix);
+      const tempVMatrix = mat4.mul(translate, xRotation);
+      mat4.mul(tempVMatrix, yRotation, tempVMatrix);
+      mat4.mul(tempVMatrix, zRotation, viewMatrix); // todo: dangerous setting viewMatrix here
       uniformData.set(viewMatrix, 16);
       device.queue.writeBuffer(uniformBuffer, 0, uniformData); // todo: write to this properly
     }
@@ -489,14 +508,19 @@ function initEffect() {
       format: depthTextureFormat,
     });
 
-    //Set up rendering loop
-    const UPDATE_INTERVAL = 16; // Update every 200ms (5 times/sec)
-    function updateGrid() {
-      if (!context) return;
-      const encoder = device.createCommandEncoder();
+    const fps = document.createElement("p");
+    fps.id = "fps";
+    fps.innerText = "0";
+    root?.appendChild(fps);
 
+    //Set up rendering loop
+    let lastTime: number = performance.now();
+    function renderFrame(timestamp: DOMHighResTimeStamp) {
+      if (!context) return;
       // Updating time
-      time[0] += 0.02;
+      const dt = timestamp - lastTime;
+      lastTime = timestamp;
+      time[0] += dt * 0.001;
       device.queue.writeBuffer(
         uniformBuffer,
         uStructure.time.OFF,
@@ -505,7 +529,23 @@ function initEffect() {
         uStructure.time.SIZE
       );
 
+      fps.innerText = `FPS: ${Math.ceil(1000 / dt)}`;
+      // todo? https://stackoverflow.com/questions/4787431/how-do-i-check-framerate-in-javascript
+
+      if (PARAMS.auto_rotate) {
+        mat4.rotate(viewMatrix, vec3.create(0, 1, 0), dt * 0.0001, viewMatrix);
+        uniformData.set(viewMatrix, 16);
+        device.queue.writeBuffer(
+          uniformBuffer,
+          uStructure.view.OFF,
+          uniformData,
+          16,
+          uStructure.view.SIZE
+        );
+      }
+
       // Render pass start
+      const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
           {
@@ -534,12 +574,11 @@ function initEffect() {
       pass.setIndexBuffer(indexBuffer, "uint32", 0);
       pass.drawIndexed(indexes.length, grassBladeCount, 0, 0, 0); // second arg is instances to draw
       pass.end();
-      const commandBuffer = encoder.finish();
 
-      device.queue.submit([commandBuffer]);
+      device.queue.submit([encoder.finish()]);
+      requestAnimationFrame(renderFrame);
     }
-    //updateGrid();
-    setInterval(updateGrid, UPDATE_INTERVAL);
+    requestAnimationFrame(renderFrame);
   })();
 
   // Cleanup
@@ -580,12 +619,13 @@ function initTweakPane(params: grassParameters, div: HTMLDivElement) {
   const f4 = pane.addFolder({
     title: "View",
   });
-  f4.addBinding(params, "x", { view: "slider", min: -2, max: 2 });
-  f4.addBinding(params, "y", { view: "slider", min: -2, max: 2 });
+  f4.addBinding(params, "x", { view: "slider", min: -5, max: 5 });
+  f4.addBinding(params, "y", { view: "slider", min: -3, max: 3 });
   f4.addBinding(params, "z", { view: "slider", min: -10, max: 10 });
   f4.addBinding(params, "x_rotation", { view: "slider", min: 0, max: 360 });
   f4.addBinding(params, "y_rotation", { view: "slider", min: 0, max: 360 });
   f4.addBinding(params, "z_rotation", { view: "slider", min: 0, max: 360 });
+  f4.addBinding(params, "auto_rotate", { view: "boolean" });
 
   const f5 = pane.addFolder({
     title: "Projection",

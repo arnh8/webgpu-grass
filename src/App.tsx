@@ -1,19 +1,16 @@
-import { useEffect, useRef } from "react";
 import "./App.css";
-import Tortle from "./GOL";
 import Grass from "./Grass";
 
 function App() {
   return (
     <>
-      <div>
-        <Grass />
+      <div id="headWrapper">
+        <h1>WebGPU Grass</h1>
+        <a href="https://github.com/arnh8/webgpu-grass">github | arnh8</a>
       </div>
-      <h1>Reee</h1>
+      <Grass />
     </>
   );
 }
 
 export default App;
-
-// <Tortle />

@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 old.wgsl
+old.js
+GOL.tsx
+GOL.wgsl
