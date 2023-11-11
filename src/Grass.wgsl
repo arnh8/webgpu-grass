@@ -35,7 +35,8 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
         multi = cos(uMyUniforms.time + (grassPositions[i].x+grassPositions[i].z))+0.8;
     }
 
-    // Rotate a little
+    // Rotate a little : todo: implement TRUE billboarding so blades always face camera 
+    // however most games dont hard billboard...
     let rotangle = f32(i);
     let tempx = sin(rotangle) * input.pos.z + cos(rotangle) * input.pos.x;
     let tempz = cos(rotangle) * input.pos.z - sin(rotangle) * input.pos.x;
