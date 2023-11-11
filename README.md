@@ -1,27 +1,27 @@
-# React + TypeScript + Vite
+![](./screenshots/S1.png)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+# WebGPU Grass
 
-Currently, two official plugins are available:
+A study on how modern games render large amounts of grass -
+I made this project to get into graphics programming and writing shaders, through WebGPU, the successor to WebGL. Study guided by [Acerola](https://www.youtube.com/@Acerola_t)!
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Built with
 
-## Expanding the ESLint configuration
+- WebGPU, WGSL
+- [wgpu-matrix](https://wgpu-matrix.org/)
+- [WGSL Noise Algorithms](https://gist.github.com/munrocket/236ed5ba7e409b8bdf1ff6eca5dcdc39)
+- [tweakpane](https://cocopon.github.io/tweakpane/)
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+### Links
 
-- Configure the top-level `parserOptions` property like this:
+- Check it out [here!](https://arnh8.github.io/webgpu-grass)
 
-```js
-   parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-   },
-```
+#
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+4,194,304 blades of grass rendered at 160fps, 2000x1200 resolution (on an RTX 3080)
+
+![](./screenshots/S4.png)
+
+![](./screenshots/S2.png)
+
+![](./screenshots/S3.png)
