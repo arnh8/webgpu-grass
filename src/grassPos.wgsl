@@ -38,8 +38,8 @@ fn computeMain(
 
     var xPos = f32(local_invocation_id.x + workgroup_id.x * WG_SIZE_X);
     var zPos = f32(local_invocation_id.z + workgroup_id.z * WG_SIZE_Z);
-    xPos = xPos / cUniforms.udensity - OFFSET - 0.0;
-    zPos = zPos / cUniforms.udensity - OFFSET - 5.8;
+    xPos = xPos / cUniforms.udensity - OFFSET - 3.5;
+    zPos = zPos / cUniforms.udensity - OFFSET - 3.5; // todo: calculate these magic numbers
 
     let simplexHash = simplexNoise2(vec2f(xPos, zPos));
 
