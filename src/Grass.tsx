@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import grassWGSL from "./Grass.wgsl?raw";
 import grassPosWGSL from "./grassPos.wgsl?raw";
-import { vec3, mat4, Mat4 } from "wgpu-matrix";
+import { vec3, mat4 } from "wgpu-matrix";
 import { FolderApi, Pane } from "tweakpane";
 
 export default function Grass() {
@@ -169,6 +169,7 @@ function initEffect() {
         GPUBufferUsage.COPY_SRC,
     });
 
+    /*
     const computeUniforms = {
       // Size and offset (in floats) of uniform data within
       // the uniform buffer and in computeUniformData array.
@@ -177,6 +178,7 @@ function initEffect() {
       y_variance: { size: 1, offset: 2 },
       y_height: { size: 1, offset: 3 },
     };
+    */
 
     const computeUniformData = new Float32Array(4);
     const computeUniformBuffer = device.createBuffer({
@@ -587,11 +589,11 @@ function initEffect() {
   };
 }
 
-function printMat4(mat: Mat4) {
-  for (let i = 0; i < 16; i += 4) {
-    console.log(`${mat[i]}, ${mat[i + 1]}, ${mat[2 + i]}, ${mat[3 + i]}`);
-  }
-}
+//function printMat4(mat: Mat4) {
+//  for (let i = 0; i < 16; i += 4) {
+//    console.log(`${mat[i]}, ${mat[i + 1]}, ${mat[2 + i]}, ${mat[3 + i]}`);
+//  }
+//}
 
 function initTweakPane(params: grassParameters, div: HTMLDivElement) {
   const pane = new Pane({ title: "Parameters", container: div });
