@@ -118,23 +118,23 @@ function initEffect() {
     root?.appendChild(guiWrapper);
 
     const PARAMS = {
-      color1: { r: 69, g: 134, b: 54 },
+      color1: { r: 89, g: 138, b: 82 },
       color2: { r: 67, g: 121, b: 61 },
       color3: { r: 46, g: 89, b: 67 },
       color4: { r: 32, g: 78, b: 83 },
       density: 10,
-      xz_variance: 1.7,
+      xz_variance: 1.0,
       y_variance: 0.4,
-      y_height: 1.3,
+      y_height: 1.0,
       scale: 1.0,
       x: 0.0,
       y: 0.0,
-      z: -5.0,
+      z: -5.5,
       x_rotation: 24,
       y_rotation: 0,
       z_rotation: 0,
       orthographic_perspective: false,
-      auto_rotate: false,
+      auto_rotate: true,
     };
     /*
     const PARAMS = {
@@ -600,23 +600,48 @@ function initTweakPane(params: grassParameters, div: HTMLDivElement) {
   const f1 = pane.addFolder({
     title: "Colors",
   });
-  f1.addBinding(params, "color1");
-  f1.addBinding(params, "color2");
-  f1.addBinding(params, "color3");
-  f1.addBinding(params, "color4");
+  f1.addBinding(params, "color1", { label: "Color 1" });
+  f1.addBinding(params, "color2", { label: "Color 2" });
+  f1.addBinding(params, "color3", { label: "Color 3" });
+  f1.addBinding(params, "color4", { label: "Color 4" });
 
   const f2 = pane.addFolder({
     title: "Compute parameters",
   });
-  f2.addBinding(params, "density", { view: "slider", min: 2, max: 14 });
-  f2.addBinding(params, "xz_variance", { view: "slider", min: -2, max: 2 });
-  f2.addBinding(params, "y_variance", { view: "slider", min: 0, max: 1.5 });
-  f2.addBinding(params, "y_height", { view: "slider", min: 0, max: 2 });
+  f2.addBinding(params, "density", {
+    view: "slider",
+    min: 2,
+    max: 14,
+    label: "Density",
+  });
+  f2.addBinding(params, "xz_variance", {
+    view: "slider",
+    min: -2,
+    max: 2,
+    label: "XZ variance",
+  });
+  f2.addBinding(params, "y_variance", {
+    view: "slider",
+    min: 0,
+    max: 1.0,
+    label: "Height variance",
+  });
+  f2.addBinding(params, "y_height", {
+    view: "slider",
+    min: 0,
+    max: 2,
+    label: "Height offset",
+  });
 
   const f3 = pane.addFolder({
     title: "Model",
   });
-  f3.addBinding(params, "scale", { view: "slider", min: 0.01, max: 3 });
+  f3.addBinding(params, "scale", {
+    view: "slider",
+    min: 0.01,
+    max: 3,
+    label: "Scale",
+  });
 
   const f4 = pane.addFolder({
     title: "View",
