@@ -13,12 +13,6 @@ const WG_SIZE_Y = 1;
 const WG_SIZE_Z = 8; 
 const numThreadsPerWorkgroup = WG_SIZE_X * WG_SIZE_Z;
 
-const OFFSET = 3.5;
-const DENSITY = 12.1;
-const XZVARIANCE = 0.7;
-const YVARIANCE = 0.25;
-const YHEIGHT = 0.65;
-
 @compute
 @workgroup_size(WG_SIZE_X, WG_SIZE_Y, WG_SIZE_Z) 
 fn computeMain(
@@ -38,12 +32,13 @@ fn computeMain(
 
     var xPos = f32(local_invocation_id.x + workgroup_id.x * WG_SIZE_X);
     var zPos = f32(local_invocation_id.z + workgroup_id.z * WG_SIZE_Z);
-    xPos = xPos / cUniforms.udensity - OFFSET - 3.5;
-    zPos = zPos / cUniforms.udensity - OFFSET - 3.5; // todo: calculate these magic numbers
+    // 64 is derived from: wg_size_x * dispatch_size_x * 0.5
+    xPos = xPos / cUniforms.udensity - 64 / cUniforms.udensity; 
+    zPos = zPos / cUniforms.udensity - 64 / cUniforms.udensity;
 
     let simplexHash = simplexNoise2(vec2f(xPos, zPos));
 
-    let yPos = simplexHash * cUniforms.uy_variance + cUniforms.uy_height;
+    let yPos = (simplexHash + 1) * cUniforms.uy_variance + cUniforms.uy_height;
     xPos = xPos + cUniforms.uxz_variance * simplexHash;
     zPos = zPos + cUniforms.uxz_variance * simplexHash;
     grassPositions[global_invocation_index] = vec3f(xPos, yPos, zPos);
