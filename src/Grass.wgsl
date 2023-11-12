@@ -41,11 +41,12 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
     let tempx = sin(rotangle) * input.pos.z + cos(rotangle) * input.pos.x;
     let tempz = cos(rotangle) * input.pos.z - sin(rotangle) * input.pos.x;
 
-    let transformx = f32(grassPositions[i].x) + 0.1 * input.pos.y * multi * input.pos.y;
+    // Sway, taller vertexes "sway" more
+    let transformx = f32(grassPositions[i].x) + 0.2 * multi * input.pos.y * input.pos.y ;
     let transformz = f32(grassPositions[i].z); // + 0.05 * input.pos.y * multi; 
     output.pos = vec4f(
         tempx + transformx, 
-        input.pos.y * grassPositions[i].y + hash, 
+        input.pos.y * grassPositions[i].y + hash, // +gP[i] for height of grass, +hash for altitude
         tempz + transformz, 
         1.0);
 
@@ -55,9 +56,9 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
         * uMyUniforms.modelMatrix 
         * output.pos;
     // Darken taller grass
-    output.col.r = input.col.r - (grassPositions[i].y - 1) * 0.2;
-    output.col.g = input.col.g - (grassPositions[i].y - 1) * 0.2;
-    output.col.b = input.col.b - (grassPositions[i].y - 1) * 0.2;
+    output.col.r = input.col.r - 0.1 * grassPositions[i].y;
+    output.col.g = input.col.g - 0.1 * grassPositions[i].y;
+    output.col.b = input.col.b - 0.1 * grassPositions[i].y;
     return output;
 }
 
